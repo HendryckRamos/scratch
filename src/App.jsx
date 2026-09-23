@@ -817,7 +817,6 @@ const App = () => {
               <div className="glass-panel chart-card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ padding: 20, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                   <h2 className="chart-title">Top Demandas: NIES</h2>
-                  <p style={{fontSize: 12, color: 'var(--text-secondary)', marginTop: 4}}>*Inclui contagem manual não catalogada via SCPJ</p>
                 </div>
                 <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                   <ul className="ranking-list">
