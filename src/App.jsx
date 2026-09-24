@@ -74,6 +74,12 @@ const App = () => {
       setSistemas(sis);
       setRankingsGlobal(rGlobal);
       setAuditoriaData(aud || []);
+      if (aud) {
+        const uniqueGroups = [...new Set(aud.map(a => a.grupo))];
+        const gruposObj = {};
+        uniqueGroups.forEach(g => gruposObj[g] = true);
+        setFiltrosAuditoria(prev => ({...prev, grupos: gruposObj}));
+      }
       setNiesAcoesSolar(solar || []);
       setNiesAcoesSCPJ(scpj || []);
       setNiesAcoesUnificado(unif || []);
@@ -197,12 +203,8 @@ const App = () => {
       demandasNiesView === 'scpj' ? niesAcoesSCPJ :
       niesAcoesUnificado;
       
-    // The data is per month, we need to aggregate all time
-    const acc = {};
-    sourceArray.forEach(d => {
-      acc[d.acao] = (acc[d.acao] || 0) + d.quantidade;
-    });
-    return Object.entries(acc).map(([name, count]) => ({name, count})).sort((a,b) => b.count - a.count);
+    // The Python script already outputs [{name, count}] aggregated
+    return sourceArray || [];
   };
 
   const acoesNies = getAcoesNiesDynamic();
