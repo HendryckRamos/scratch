@@ -268,6 +268,22 @@ const App = () => {
     return matchComarca && matchGrupo;
   });
 
+  // --- TAB 6 CALCULATIONS (Impacto NIES) ---
+  const impactoData = totals.map(r => ({
+    mes: r.Mes,
+    belem_total: r['DP Geral'],
+    nies_total: r['NIES Geral'],
+    nies_percent: r['DP Geral'] > 0 ? ((r['NIES Geral'] / r['DP Geral']) * 100).toFixed(1) : 0
+  }));
+  const totalProtocolado = impactoData.reduce((a, b) => a + b.belem_total, 0);
+  const totalNies = impactoData.reduce((a, b) => a + b.nies_total, 0);
+  const pctGeral = totalProtocolado > 0 ? ((totalNies / totalProtocolado) * 100).toFixed(1) : 0;
+  
+  const dpDefsSet = new Set(rankingsDefs.filter(d => !d.Grupo.startsWith('NIES')).map(d => d.Defensores));
+  const niesDefsSet = new Set(rankingsDefs.filter(d => d.Grupo.startsWith('NIES')).map(d => d.Defensores));
+  const totalDpDefs = dpDefsSet.size;
+  const totalNiesDefs = niesDefsSet.size;
+
   return (
     <div className="dashboard-container">
       {modalInfo && (
@@ -984,31 +1000,31 @@ const App = () => {
                   <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Comparativo do volume protocolado pelo NIES frente ao total de processos em Belém.</p>
                 </div>
 
-                {impactoNies.length > 0 && (
+                {impactoData.length > 0 && (
                   <div className="responsive-grid-3">
                     <div className="glass-panel kpi-card">
-                      <p className="kpi-title">TOTAL PROTOCOLADO (Belém)</p>
-                      <h3 className="kpi-value">{impactoNies.reduce((a, b) => a + b.belem_total, 0).toLocaleString()} <span style={{fontSize: 16, fontWeight: 400, color: 'var(--text-secondary)'}}>processos</span></h3>
+                      <p className="kpi-title">TOTAL PROTOCOLADO ({comarca})</p>
+                      <h3 className="kpi-value">{totalProtocolado.toLocaleString()} <span style={{fontSize: 16, fontWeight: 400, color: 'var(--text-secondary)'}}>processos</span></h3>
                       <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                        <span style={{color: '#fff', fontWeight: 600}}>{impactoNies.reduce((a, b) => a + b.belem_defensores, 0)}</span> defensores assinaram
+                        <span style={{color: '#fff', fontWeight: 600}}>{totalDpDefs}</span> defensores assinaram
                       </p>
                     </div>
                     
                     <div className="glass-panel kpi-card" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(59, 130, 246, 0.1))' }}>
                       <p className="kpi-title" style={{ color: '#fff' }}>TOTAL NIES (Solar + SCPJ)</p>
-                      <h3 className="kpi-value" style={{ color: 'var(--accent-secondary)' }}>{impactoNies.reduce((a, b) => a + b.nies_total, 0).toLocaleString()} <span style={{fontSize: 16, fontWeight: 400, color: 'var(--text-secondary)'}}>processos</span></h3>
+                      <h3 className="kpi-value" style={{ color: 'var(--accent-secondary)' }}>{totalNies.toLocaleString()} <span style={{fontSize: 16, fontWeight: 400, color: 'var(--text-secondary)'}}>processos</span></h3>
                       <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                        <span style={{color: '#fff', fontWeight: 600}}>3</span> defensoras assinaram
+                        <span style={{color: '#fff', fontWeight: 600}}>{totalNiesDefs}</span> defensoras assinaram
                       </p>
                     </div>
                     
                     <div className="glass-panel kpi-card" style={{ border: '1px solid rgba(255, 215, 0, 0.3)', background: 'rgba(255, 215, 0, 0.05)' }}>
                       <p className="kpi-title" style={{ color: 'gold' }}>PARTICIPAÇÃO %</p>
                       <h3 className="kpi-value" style={{ color: 'gold' }}>
-                        {((impactoNies.reduce((a, b) => a + b.nies_total, 0) / impactoNies.reduce((a, b) => a + b.belem_total, 0)) * 100).toFixed(1)}%
+                        {pctGeral}%
                       </h3>
                       <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                        do volume total com apenas <span style={{color: 'gold', fontWeight: 600}}>4.3%</span> do quadro
+                        do volume total com apenas <span style={{color: 'gold', fontWeight: 600}}>{totalDpDefs > 0 ? ((totalNiesDefs / totalDpDefs) * 100).toFixed(1) : 0}%</span> do quadro
                       </p>
                     </div>
                   </div>
@@ -1020,7 +1036,7 @@ const App = () => {
                       <h2 className="chart-title">Adoção Mensal do NIES em Relação ao Total (%)</h2>
                     </div>
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={impactoNies} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <AreaChart data={impactoData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                         <defs>
                           <linearGradient id="colorPct" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="gold" stopOpacity={0.4}/>
