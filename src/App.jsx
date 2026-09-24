@@ -27,6 +27,7 @@ const App = () => {
   // Impacto
   const [impactoNies, setImpactoNies] = useState([]);
   const [comparativoNucleos, setComparativoNucleos] = useState([]);
+  const [servidoresStats, setServidoresStats] = useState([]);
   // Produtividade Defensoras
   const [defensorasData, setDefensorasData] = useState([]);
   const [selectedDefensoraMes, setSelectedDefensoraMes] = useState('Total'); // Can be a specific month or 'Total'
@@ -63,8 +64,9 @@ const App = () => {
       fetch(`/data/nies_acoes_unificado.json?t=${t}`).then(r => r.json()).catch(() => []),
       fetch(`/data/impacto_nies_belem.json?t=${t}`).then(r => r.json()).catch(() => []),
       fetch(`/data/defensoras_nies_detalhado.json?t=${t}`).then(r => r.json()).catch(() => []),
-      fetch(`/data/comparativo_nucleos.json?t=${t}`).then(r => r.json()).catch(() => [])
-    ]).then(([tot, avg, rDefs, rAcoes, sis, rGlobal, aud, solar, scpj, unif, imp, defsData, compNuc]) => {
+      fetch(`/data/comparativo_nucleos.json?t=${t}`).then(r => r.json()).catch(() => []),
+      fetch(`/data/servidores_stats.json?t=${t}`).then(r => r.json()).catch(() => [])
+    ]).then(([tot, avg, rDefs, rAcoes, sis, rGlobal, aud, solar, scpj, unif, imp, defsData, compNuc, servStats]) => {
       setTotals(tot);
       setAverages(avg);
       setRankingsDefs(rDefs);
@@ -78,6 +80,7 @@ const App = () => {
       setImpactoNies(imp || []);
       setDefensorasData(defsData || []);
       setComparativoNucleos(compNuc || []);
+      setServidoresStats(servStats || []);
       setLoading(false);
     }).catch(err => {
       console.error("Erro ao carregar dados avançados", err);
@@ -1090,6 +1093,42 @@ const App = () => {
                       </tbody>
                     </table>
                   </div>
+
+                {/* Eficiência da Equipe de Apoio */}
+                {servidoresStats.length > 0 && (
+                  <div className="glass-panel chart-card" style={{ marginTop: '32px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                    <div className="chart-header">
+                      <h2 className="chart-title" style={{ color: '#10b981' }}>Eficiência da Equipe de Apoio (Servidores e Assessores)</h2>
+                      <p style={{ color: 'var(--text-secondary)' }}>
+                        Relação de protocolos enviados pela equipe de apoio frente ao quadro de servidores ativos em Belém.
+                      </p>
+                    </div>
+                    <div style={{ overflowX: 'auto', marginTop: 16 }}>
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Área / Núcleo</th>
+                            <th>Protocolos Enviados</th>
+                            <th>Qtd. Defensores</th>
+                            <th>Qtd. Servidores (Apoio)</th>
+                            <th style={{color: 'gold'}}>Média (Processos / Servidor)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {servidoresStats.map((row, idx) => (
+                            <tr key={idx} style={row.Area.includes('NIES') ? {background: 'rgba(16, 185, 129, 0.05)'} : {}}>
+                              <td style={row.Area.includes('NIES') ? {fontWeight: 'bold', color: 'var(--accent-secondary)'} : {fontWeight: 600}}>{row.Area}</td>
+                              <td>{row.Protocolos}</td>
+                              <td>{row.Defensores}</td>
+                              <td>{row.Servidores}</td>
+                              <td style={{color: 'gold', fontWeight: 'bold'}}>{row.Relacao_Processo_Servidor}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
                 </div>
 
                 {/* Comparativo de Núcleos Cíveis (Fazenda, Residual, etc) */}
