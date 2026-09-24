@@ -16,15 +16,30 @@ const App = () => {
   const [averages, setAverages] = useState([]);
   const [rankingsDefs, setRankingsDefs] = useState([]);
   const [rankingsAcoes, setRankingsAcoes] = useState([]);
-  const [sistemas, setSistemas] = useState([]); // from nies_consolidado
-    const [rankingsGlobal, setRankingsGlobal] = useState([]);
-    const [selectedGlobalMonth, setSelectedGlobalMonth] = useState('01/2026');
+  const [sistemas, setSistemas] = useState([]);
+  const [rankingsGlobal, setRankingsGlobal] = useState([]);
+  const [selectedGlobalMonth, setSelectedGlobalMonth] = useState('01/2026');
   const [loading, setLoading] = useState(true);
+  // NIES actions by source
+  const [niesAcoesSolar, setNiesAcoesSolar] = useState([]);
+  const [niesAcoesSCPJ, setNiesAcoesSCPJ] = useState([]);
+  const [niesAcoesUnificado, setNiesAcoesUnificado] = useState([]);
+  // Impacto
+  const [impactoNies, setImpactoNies] = useState([]);
+  const [comparativoNucleos, setComparativoNucleos] = useState([]);
+  // Produtividade Defensoras
+  const [defensorasData, setDefensorasData] = useState([]);
+  const [selectedDefensoraMes, setSelectedDefensoraMes] = useState('Total'); // Can be a specific month or 'Total'
+  const [produtividadeView, setProdutividadeView] = useState('unificado'); // 'solar', 'scpj', 'unificado'
   
-  // Tabs: 1=Matrizes/Tabelas, 2=Rankings, 3=Demandas, 4=Sistemas NIES
+  // 'solar' | 'scpj' | 'unificado'
+  const [demandasNiesView, setDemandasNiesView] = useState('unificado');
+
+  // Tabs: 1=Comparativo, 2=Rankings, 3=Demandas, 4=Sistemas NIES
   const [activeTab, setActiveTab] = useState(1);
   const [modalInfo, setModalInfo] = useState(null);
   const [comarca, setComarca] = useState('Belém');
+  const [civelTarget, setCivelTarget] = useState('Total');
   const [selectedMonth, setSelectedMonth] = useState('01/2026');
 
   useEffect(() => {
@@ -42,15 +57,27 @@ const App = () => {
       fetch(`/data/rankings_acoes${suffix}.json?t=${t}`).then(r => r.json()),
       fetch(`/data/nies_consolidado.json?t=${t}`).then(r => r.json()),
       fetch(`/data/rankings_defensores_global.json?t=${t}`).then(r => r.json()),
-      fetch(`/data/auditoria_completa.json?t=${t}`).then(r => r.json()).catch(() => [])
-    ]).then(([t, a, rDefs, rAcoes, sis, rGlobal, aud]) => {
-      setTotals(t);
-      setAverages(a);
+      fetch(`/data/auditoria_completa.json?t=${t}`).then(r => r.json()).catch(() => []),
+      fetch(`/data/nies_acoes_solar.json?t=${t}`).then(r => r.json()).catch(() => []),
+      fetch(`/data/nies_acoes_scpj.json?t=${t}`).then(r => r.json()).catch(() => []),
+      fetch(`/data/nies_acoes_unificado.json?t=${t}`).then(r => r.json()).catch(() => []),
+      fetch(`/data/impacto_nies_belem.json?t=${t}`).then(r => r.json()).catch(() => []),
+      fetch(`/data/defensoras_nies_detalhado.json?t=${t}`).then(r => r.json()).catch(() => []),
+      fetch(`/data/comparativo_nucleos.json?t=${t}`).then(r => r.json()).catch(() => [])
+    ]).then(([tot, avg, rDefs, rAcoes, sis, rGlobal, aud, solar, scpj, unif, imp, defsData, compNuc]) => {
+      setTotals(tot);
+      setAverages(avg);
       setRankingsDefs(rDefs);
       setRankingsAcoes(rAcoes);
       setSistemas(sis);
       setRankingsGlobal(rGlobal);
       setAuditoriaData(aud || []);
+      setNiesAcoesSolar(solar || []);
+      setNiesAcoesSCPJ(scpj || []);
+      setNiesAcoesUnificado(unif || []);
+      setImpactoNies(imp || []);
+      setDefensorasData(defsData || []);
+      setComparativoNucleos(compNuc || []);
       setLoading(false);
     }).catch(err => {
       console.error("Erro ao carregar dados avançados", err);
@@ -59,26 +86,7 @@ const App = () => {
   }, [comarca]);
 
   if (loading) {
-  
-  // --- TAB 5 CALCULATIONS (Auditoria) ---
-  const handleToggleFiltro = (categoria, valor) => {
-    setFiltrosAuditoria(prev => ({
-      ...prev,
-      [categoria]: {
-        ...prev[categoria],
-        [valor]: !prev[categoria][valor]
-      }
-    }));
-  };
-
-  const auditoriaFiltrada = auditoriaData.filter(row => {
-    const matchComarca = filtrosAuditoria.comarcas[row.comarca] !== false;
-    const matchGrupo = filtrosAuditoria.grupos[row.grupo] !== false;
-    return matchComarca && matchGrupo;
-  });
-
-  return (
-
+    return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#fff' }}>
         <Loader2 size={48} className="animate-spin" />
         <h2 style={{ marginLeft: 16 }}>Compilando Matrizes de Dados...</h2>
@@ -101,7 +109,22 @@ const App = () => {
     });
     return footer;
   };
-  const footerTotals = calculateFooterTotals(totals);
+  const processedTotals = totals.map(r => {
+    if (comarca === 'Belém' && civelTarget !== 'Total' && comparativoNucleos.length > 0) {
+      const comp = comparativoNucleos.find(c => c.mes === r.Mes);
+      if (comp && comp[civelTarget.toLowerCase()] !== undefined) {
+        const newCivel = comp[civelTarget.toLowerCase()];
+        return {
+          ...r,
+          'DP Cível': newCivel,
+          'DP Geral': newCivel + r['DP Família']
+        };
+      }
+    }
+    return r;
+  });
+
+  const footerTotals = calculateFooterTotals(processedTotals);
   const footerAverages = calculateFooterTotals(averages);
 
   // --- TAB 2 CALCULATIONS (Rankings Defensores) ---
@@ -151,6 +174,8 @@ const App = () => {
   const monthlyGeralRanking = getUnifiedMonthlyRanking('Geral', selectedMonth);
 
   // --- TAB 3 CALCULATIONS (Rankings Absolutos Antigos) ---
+  // Ações NIES agora vem dos 3 JSONs dependendo do switch (apenas para Belém)
+  // Para outras comarcas, usa getAcoes('NIES') normal
   const getAcoes = (groupPrefix) => {
     const acc = {};
     rankingsAcoes.filter(d => d.Grupo.startsWith(groupPrefix)).forEach(d => {
@@ -158,7 +183,26 @@ const App = () => {
     });
     return Object.entries(acc).map(([name, count]) => ({name, count})).sort((a,b) => b.count - a.count);
   };
-  const acoesNies = getAcoes('NIES');
+  
+  // Aggregate NIES actions dynamically based on selected view
+  const getAcoesNiesDynamic = () => {
+    if (comarca !== 'Belém') return getAcoes('NIES');
+    
+    // For Belém, use the generated unified arrays based on the toggle
+    const sourceArray = 
+      demandasNiesView === 'solar' ? niesAcoesSolar :
+      demandasNiesView === 'scpj' ? niesAcoesSCPJ :
+      niesAcoesUnificado;
+      
+    // The data is per month, we need to aggregate all time
+    const acc = {};
+    sourceArray.forEach(d => {
+      acc[d.acao] = (acc[d.acao] || 0) + d.quantidade;
+    });
+    return Object.entries(acc).map(([name, count]) => ({name, count})).sort((a,b) => b.count - a.count);
+  };
+
+  const acoesNies = getAcoesNiesDynamic();
   const acoesFamDP = getAcoes('DP Família');
   const acoesCivDP = getAcoes('DP Cível');
 
@@ -198,55 +242,14 @@ const App = () => {
   const demandasCiv = getDemandasCruzadas('Cível');
   const demandasGeral = getDemandasCruzadas('Geral');
 
-  
-  // --- TAB 5 CALCULATIONS (Megaranking Global) ---
-  const availableGlobalMonths = [...new Set(rankingsGlobal.map(d => d.Mes))].sort();
-  
-  const getGlobalMonthlyRanking = (mes) => {
-    const filtered = rankingsGlobal.filter(d => d.Mes === mes);
-    const aggregated = filtered.reduce((acc, curr) => {
-      if (!acc[curr.Defensores]) {
-        acc[curr.Defensores] = { count: 0, isNies: curr.Grupo.includes('NIES') };
-      }
-      acc[curr.Defensores].count += curr.Processos;
-      return acc;
-    }, {});
-    return Object.entries(aggregated)
-      .map(([name, data]) => ({ name, count: data.count, isNies: data.isNies }))
-      .sort((a, b) => b.count - a.count);
-  };
-  
-  const getGlobalAllTimeRanking = () => {
-    const aggregated = rankingsGlobal.reduce((acc, curr) => {
-      if (!acc[curr.Defensores]) {
-        acc[curr.Defensores] = { count: 0, isNies: curr.Grupo.includes('NIES') };
-      }
-      acc[curr.Defensores].count += curr.Processos;
-      return acc;
-    }, {});
-    return Object.entries(aggregated)
-      .map(([name, data]) => ({ name, count: data.count, isNies: data.isNies }))
-      .sort((a, b) => b.count - a.count);
-  };
-
-  const globalMonthlyRanking = getGlobalMonthlyRanking(selectedGlobalMonth);
-  const globalAllTimeRanking = getGlobalAllTimeRanking();
-
-// --- TAB 4 CALCULATIONS (Sistemas NIES) ---
-  const monthsSistemas = Array.from(new Set(sistemas.map(d => d.mes))).sort((a,b) => {
-    const [ma, ya] = a.split('/');
-    const [mb, yb] = b.split('/');
-    return new Date(`${ya}-${ma}-01`) - new Date(`${yb}-${mb}-01`);
+  // --- TAB 4 CALCULATIONS (Sistemas) ---
+  const sysObj = {};
+  sistemas.forEach(d => {
+    if (!sysObj[d.mes]) sysObj[d.mes] = { mes: d.mes, SOLAR: 0, SCPJ: 0 };
+    if (d.sistema === 'SOLAR') sysObj[d.mes].SOLAR += d.quantidade;
+    if (d.sistema === 'SCPJ') sysObj[d.mes].SCPJ += d.quantidade;
   });
-  const chartSistemasData = monthsSistemas.map(mes => {
-    const monthData = sistemas.filter(d => d.mes === mes);
-    return {
-      mes,
-      'SOLAR': monthData.filter(d => d.sistema === 'SOLAR').reduce((acc, curr) => acc + curr.quantidade, 0),
-      'SCPJ': monthData.filter(d => d.sistema === 'SCPJ').reduce((acc, curr) => acc + curr.quantidade, 0),
-    };
-  });
-
+  const chartSistemasData = Object.values(sysObj).sort((a,b) => a.mes.localeCompare(b.mes));
 
   // --- TAB 5 CALCULATIONS (Auditoria) ---
   const handleToggleFiltro = (categoria, valor) => {
@@ -266,7 +269,6 @@ const App = () => {
   });
 
   return (
-
     <div className="dashboard-container">
       {modalInfo && (
         <div style={{
@@ -343,12 +345,14 @@ const App = () => {
       </header>
 
       {/* TABS NAVIGATION */}
-      <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 16, marginTop: 16 }}>
-        <button className={`tab-button ${activeTab === 1 ? 'active' : ''}`} onClick={() => setActiveTab(1)}><LayoutDashboard size={14} style={{display:'inline', marginRight:6}}/> Matrizes Mensais</button>
+      <div className="tabs-container">
+        <button className={`tab-button ${activeTab === 1 ? 'active' : ''}`} onClick={() => setActiveTab(1)}><LayoutDashboard size={14} style={{display:'inline', marginRight:6}}/> Comparativo Mensal</button>
         <button className={`tab-button ${activeTab === 2 ? 'active' : ''}`} onClick={() => setActiveTab(2)}><Trophy size={14} style={{display:'inline', marginRight:6}}/> Ranking Defensores</button>
-        <button className={`tab-button ${activeTab === 3 ? 'active' : ''}`} onClick={() => setActiveTab(3)}><ListOrdered size={14} style={{display:'inline', marginRight:6}}/> Top Demandas (Ações)</button>
-        <button className={`tab-button ${activeTab === 4 ? 'active' : ''}`} onClick={() => setActiveTab(4)}><Activity size={14} style={{display:'inline', marginRight:6}}/> Sistemas NIES</button>
-        <button className={`tab-button ${activeTab === 5 ? 'active' : ''}`} onClick={() => setActiveTab(5)}><Database size={14} style={{display:'inline', marginRight:6}}/> Auditoria</button>
+        <button className={`tab-button ${activeTab === 3 ? 'active' : ''}`} onClick={() => setActiveTab(3)}><ListOrdered size={14} style={{display:'inline', marginRight:6}}/> Top Demandas</button>
+        <button className={`tab-button ${activeTab === 6 ? 'active' : ''}`} onClick={() => setActiveTab(6)}><Activity size={14} style={{display:'inline', marginRight:6}}/> Impacto NIES</button>
+        <button className={`tab-button ${activeTab === 7 ? 'active' : ''}`} onClick={() => setActiveTab(7)}><Users size={14} style={{display:'inline', marginRight:6}}/> Produtividade Defensoras</button>
+        <button className={`tab-button ${activeTab === 4 ? 'active' : ''}`} onClick={() => setActiveTab(4)}><Activity size={14} style={{display:'inline', marginRight:6}}/> SOLAR vs SCPJ</button>
+        <button className={`tab-button ${activeTab === 5 ? 'active' : ''}`} onClick={() => setActiveTab(5)}><Database size={14} style={{display:'inline', marginRight:6}}/> Auditoria de Dados</button>
       </div>
 
       <section style={{ marginTop: 24 }}>
@@ -365,34 +369,31 @@ const App = () => {
                 {/* PAIR 1: CÍVEL */}
                 <div className="glass-panel chart-card" style={{ padding: 0, overflow: 'hidden' }}>
                   <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(59, 130, 246, 0.1)' }}>
-                    <h3 className="chart-title" style={{color: '#60a5fa'}}>Comparativo Cível</h3>
-                  </div>
-                  <table className="data-table">
-                    <thead><tr><th>Mês</th><th>DP Oficial</th><th>NIES</th><th>NIES %</th></tr></thead>
-                    <tbody>
-                      {totals.map(r => {
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h3 className="chart-title" style={{color: '#60a5fa'}}>Comparativo Cível</h3>
+                        {comarca === 'Belém' && (
+                          <select 
+                            className="filter-select" 
+                            style={{ padding: '4px 8px', fontSize: 12 }}
+                            value={civelTarget} 
+                            onChange={e => setCivelTarget(e.target.value)}
+                          >
+                            <option value="Total">Cível Total</option>
+                            <option value="Fazenda">Fazenda Pública</option>
+                            <option value="Consumidor">Consumidor</option>
+                            <option value="Residual">Cível Residual</option>
+                            <option value="Moradia">Moradia</option>
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                    <table className="data-table">
+                      <thead><tr><th>Mês</th><th>DP Oficial</th><th>NIES</th><th>NIES %</th></tr></thead>
+                      <tbody>
+                        {processedTotals.map(r => {
                         const pct = r['DP Cível'] > 0 ? Math.round((r['NIES Cível'] / r['DP Cível']) * 100) : 0;
                         const isGood = pct >= 50;
-                      
-  // --- TAB 5 CALCULATIONS (Auditoria) ---
-  const handleToggleFiltro = (categoria, valor) => {
-    setFiltrosAuditoria(prev => ({
-      ...prev,
-      [categoria]: {
-        ...prev[categoria],
-        [valor]: !prev[categoria][valor]
-      }
-    }));
-  };
-
-  const auditoriaFiltrada = auditoriaData.filter(row => {
-    const matchComarca = filtrosAuditoria.comarcas[row.comarca] !== false;
-    const matchGrupo = filtrosAuditoria.grupos[row.grupo] !== false;
-    return matchComarca && matchGrupo;
-  });
-
-  return (
-
+                        return (
                           <tr key={r.Mes}>
                             <td>{r.Mes}</td>
                             <td title={`Base: ${r['DP Cível Defs']} defensores cíveis`} style={{cursor: 'help', textDecoration: 'underline dotted rgba(255,255,255,0.3)'}}>{r['DP Cível']}</td>
@@ -421,29 +422,10 @@ const App = () => {
                   <table className="data-table">
                     <thead><tr><th>Mês</th><th>DP Família</th><th>NIES</th><th>NIES %</th></tr></thead>
                     <tbody>
-                      {totals.map(r => {
+                      {processedTotals.map(r => {
                         const pct = r['DP Família'] > 0 ? Math.round((r['NIES Família'] / r['DP Família']) * 100) : 0;
                         const isGood = pct >= 50;
-                      
-  // --- TAB 5 CALCULATIONS (Auditoria) ---
-  const handleToggleFiltro = (categoria, valor) => {
-    setFiltrosAuditoria(prev => ({
-      ...prev,
-      [categoria]: {
-        ...prev[categoria],
-        [valor]: !prev[categoria][valor]
-      }
-    }));
-  };
-
-  const auditoriaFiltrada = auditoriaData.filter(row => {
-    const matchComarca = filtrosAuditoria.comarcas[row.comarca] !== false;
-    const matchGrupo = filtrosAuditoria.grupos[row.grupo] !== false;
-    return matchComarca && matchGrupo;
-  });
-
-  return (
-
+                        return (
                           <tr key={r.Mes}>
                             <td>{r.Mes}</td>
                             <td title={`Base: ${r['DP Família Defs']} defensores DP Família`} style={{cursor: 'help', textDecoration: 'underline dotted rgba(255,255,255,0.3)'}}>{r['DP Família']}</td>
@@ -472,29 +454,10 @@ const App = () => {
                   <table className="data-table">
                     <thead><tr><th>Mês</th><th>DPs Totais</th><th>NIES Total</th><th>NIES %</th></tr></thead>
                     <tbody>
-                      {totals.map(r => {
+                      {processedTotals.map(r => {
                         const pct = r['DP Geral'] > 0 ? Math.round((r['NIES Geral'] / r['DP Geral']) * 100) : 0;
                         const isGood = pct >= 50;
-                      
-  // --- TAB 5 CALCULATIONS (Auditoria) ---
-  const handleToggleFiltro = (categoria, valor) => {
-    setFiltrosAuditoria(prev => ({
-      ...prev,
-      [categoria]: {
-        ...prev[categoria],
-        [valor]: !prev[categoria][valor]
-      }
-    }));
-  };
-
-  const auditoriaFiltrada = auditoriaData.filter(row => {
-    const matchComarca = filtrosAuditoria.comarcas[row.comarca] !== false;
-    const matchGrupo = filtrosAuditoria.grupos[row.grupo] !== false;
-    return matchComarca && matchGrupo;
-  });
-
-  return (
-
+                        return (
                           <tr key={r.Mes}>
                             <td>{r.Mes}</td>
                             <td title={`Base: ${r['DP Geral Defs']} defensores totais`} style={{cursor: 'help', textDecoration: 'underline dotted rgba(255,255,255,0.3)'}}>{r['DP Geral']}</td>
@@ -534,26 +497,7 @@ const App = () => {
                       {averages.map(r => {
                         const pct = r['Média DP Cível'] > 0 ? Math.round((r['Média NIES Cível'] / r['Média DP Cível']) * 100) : 0;
                         const isGood = pct >= 50;
-                      
-  // --- TAB 5 CALCULATIONS (Auditoria) ---
-  const handleToggleFiltro = (categoria, valor) => {
-    setFiltrosAuditoria(prev => ({
-      ...prev,
-      [categoria]: {
-        ...prev[categoria],
-        [valor]: !prev[categoria][valor]
-      }
-    }));
-  };
-
-  const auditoriaFiltrada = auditoriaData.filter(row => {
-    const matchComarca = filtrosAuditoria.comarcas[row.comarca] !== false;
-    const matchGrupo = filtrosAuditoria.grupos[row.grupo] !== false;
-    return matchComarca && matchGrupo;
-  });
-
-  return (
-
+                        return (
                           <tr key={r.Mes}>
                             <td>{r.Mes}</td>
                             <td title={`Base: ${r['DP Cível Defs']} defensores cíveis`} style={{cursor: 'help', textDecoration: 'underline dotted rgba(255,255,255,0.3)'}}>{r['Média DP Cível']}</td>
@@ -585,26 +529,7 @@ const App = () => {
                       {averages.map(r => {
                         const pct = r['Média DP Família'] > 0 ? Math.round((r['Média NIES Família'] / r['Média DP Família']) * 100) : 0;
                         const isGood = pct >= 50;
-                      
-  // --- TAB 5 CALCULATIONS (Auditoria) ---
-  const handleToggleFiltro = (categoria, valor) => {
-    setFiltrosAuditoria(prev => ({
-      ...prev,
-      [categoria]: {
-        ...prev[categoria],
-        [valor]: !prev[categoria][valor]
-      }
-    }));
-  };
-
-  const auditoriaFiltrada = auditoriaData.filter(row => {
-    const matchComarca = filtrosAuditoria.comarcas[row.comarca] !== false;
-    const matchGrupo = filtrosAuditoria.grupos[row.grupo] !== false;
-    return matchComarca && matchGrupo;
-  });
-
-  return (
-
+                        return (
                           <tr key={r.Mes}>
                             <td>{r.Mes}</td>
                             <td title={`Base: ${r['DP Família Defs']} defensores DP Família`} style={{cursor: 'help', textDecoration: 'underline dotted rgba(255,255,255,0.3)'}}>{r['Média DP Família']}</td>
@@ -636,26 +561,7 @@ const App = () => {
                       {averages.map(r => {
                         const pct = r['Média DP Geral'] > 0 ? Math.round((r['Média NIES Geral'] / r['Média DP Geral']) * 100) : 0;
                         const isGood = pct >= 50;
-                      
-  // --- TAB 5 CALCULATIONS (Auditoria) ---
-  const handleToggleFiltro = (categoria, valor) => {
-    setFiltrosAuditoria(prev => ({
-      ...prev,
-      [categoria]: {
-        ...prev[categoria],
-        [valor]: !prev[categoria][valor]
-      }
-    }));
-  };
-
-  const auditoriaFiltrada = auditoriaData.filter(row => {
-    const matchComarca = filtrosAuditoria.comarcas[row.comarca] !== false;
-    const matchGrupo = filtrosAuditoria.grupos[row.grupo] !== false;
-    return matchComarca && matchGrupo;
-  });
-
-  return (
-
+                        return (
                           <tr key={r.Mes}>
                             <td>{r.Mes}</td>
                             <td 
@@ -814,11 +720,27 @@ const App = () => {
             <h1 className="title" style={{ fontSize: '24px', marginBottom: '24px' }}>Rankings Absolutos de Demandas ({comarca})</h1>
             
             <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-              <div className="glass-panel chart-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="glass-panel chart-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: 20, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                  <h2 className="chart-title">Top Demandas: NIES</h2>
+                  <h2 className="chart-title" style={{marginBottom: comarca === 'Belém' ? 12 : 0}}>Top Demandas: NIES</h2>
+                  {comarca === 'Belém' && (
+                    <div style={{ display: 'flex', gap: 4, background: 'rgba(0,0,0,0.2)', padding: 4, borderRadius: 8, width: 'fit-content' }}>
+                      <button 
+                        onClick={() => setDemandasNiesView('solar')}
+                        style={{ padding: '4px 12px', fontSize: 11, borderRadius: 6, border: 'none', cursor: 'pointer', background: demandasNiesView === 'solar' ? 'var(--accent-primary)' : 'transparent', color: '#fff', fontWeight: demandasNiesView === 'solar' ? 600 : 400 }}
+                      >SOLAR</button>
+                      <button 
+                        onClick={() => setDemandasNiesView('scpj')}
+                        style={{ padding: '4px 12px', fontSize: 11, borderRadius: 6, border: 'none', cursor: 'pointer', background: demandasNiesView === 'scpj' ? 'var(--accent-secondary)' : 'transparent', color: '#fff', fontWeight: demandasNiesView === 'scpj' ? 600 : 400 }}
+                      >SCPJ</button>
+                      <button 
+                        onClick={() => setDemandasNiesView('unificado')}
+                        style={{ padding: '4px 12px', fontSize: 11, borderRadius: 6, border: 'none', cursor: 'pointer', background: demandasNiesView === 'unificado' ? 'linear-gradient(45deg, #10b981, #3b82f6)' : 'transparent', color: '#fff', fontWeight: demandasNiesView === 'unificado' ? 600 : 400 }}
+                      >UNIFICADO</button>
+                    </div>
+                  )}
                 </div>
-                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
                   <ul className="ranking-list">
                     {acoesNies.map((item, idx) => (
                       <li key={item.name}>
@@ -1045,6 +967,291 @@ const App = () => {
             </div>
           </div>
         )}
+        {/* TAB 6: IMPACTO NIES */}
+        {activeTab === 6 && (
+          <div className="tab-content fade-in">
+            {comarca !== 'Belém' ? (
+              <div className="glass-panel" style={{ padding: 40, textAlign: 'center' }}>
+                <Activity size={48} style={{ color: 'var(--text-secondary)', marginBottom: 16 }} />
+                <h2 style={{ fontSize: 24, marginBottom: 8 }}>Impacto não disponível</h2>
+                <p style={{ color: 'var(--text-secondary)' }}>A aba de Impacto está disponível apenas para a comarca de Belém no momento.</p>
+                <button onClick={() => setComarca('Belém')} className="tab-button active" style={{ marginTop: 24, padding: '12px 24px' }}>Mudar para Belém</button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+                <div>
+                  <h1 className="title" style={{ fontSize: '24px', marginBottom: '8px' }}>Impacto Geral do NIES ({comarca})</h1>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Comparativo do volume protocolado pelo NIES frente ao total de processos em Belém.</p>
+                </div>
+
+                {impactoNies.length > 0 && (
+                  <div className="responsive-grid-3">
+                    <div className="glass-panel kpi-card">
+                      <p className="kpi-title">TOTAL PROTOCOLADO (Belém)</p>
+                      <h3 className="kpi-value">{impactoNies.reduce((a, b) => a + b.belem_total, 0).toLocaleString()} <span style={{fontSize: 16, fontWeight: 400, color: 'var(--text-secondary)'}}>processos</span></h3>
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                        <span style={{color: '#fff', fontWeight: 600}}>{impactoNies.reduce((a, b) => a + b.belem_defensores, 0)}</span> defensores assinaram
+                      </p>
+                    </div>
+                    
+                    <div className="glass-panel kpi-card" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(59, 130, 246, 0.1))' }}>
+                      <p className="kpi-title" style={{ color: '#fff' }}>TOTAL NIES (Solar + SCPJ)</p>
+                      <h3 className="kpi-value" style={{ color: 'var(--accent-secondary)' }}>{impactoNies.reduce((a, b) => a + b.nies_total, 0).toLocaleString()} <span style={{fontSize: 16, fontWeight: 400, color: 'var(--text-secondary)'}}>processos</span></h3>
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                        <span style={{color: '#fff', fontWeight: 600}}>3</span> defensoras assinaram
+                      </p>
+                    </div>
+                    
+                    <div className="glass-panel kpi-card" style={{ border: '1px solid rgba(255, 215, 0, 0.3)', background: 'rgba(255, 215, 0, 0.05)' }}>
+                      <p className="kpi-title" style={{ color: 'gold' }}>PARTICIPAÇÃO %</p>
+                      <h3 className="kpi-value" style={{ color: 'gold' }}>
+                        {((impactoNies.reduce((a, b) => a + b.nies_total, 0) / impactoNies.reduce((a, b) => a + b.belem_total, 0)) * 100).toFixed(1)}%
+                      </h3>
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                        do volume total com apenas <span style={{color: 'gold', fontWeight: 600}}>4.3%</span> do quadro
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="responsive-grid-3">
+                  <div className="glass-panel chart-card" style={{ gridColumn: '1 / -1' }}>
+                    <div className="chart-header">
+                      <h2 className="chart-title">Adoção Mensal do NIES em Relação ao Total (%)</h2>
+                    </div>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={impactoNies} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorPct" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="gold" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="gold" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
+                        <XAxis dataKey="mes" stroke="var(--text-secondary)" tickLine={false} axisLine={false} />
+                        <YAxis stroke="var(--text-secondary)" tickLine={false} axisLine={false} unit="%" />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: 'rgba(255,255,255,0.1)', borderRadius: 8 }}
+                          itemStyle={{ color: '#fff' }}
+                        />
+                        <Area type="monotone" dataKey="nies_percent" name="% NIES no Mês" stroke="gold" strokeWidth={3} fill="url(#colorPct)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="glass-panel chart-card" style={{ padding: 0, overflow: 'hidden' }}>
+                  <div style={{ padding: 20, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <h2 className="chart-title">Breakdown: Composição do Impacto (Solar vs SCPJ)</h2>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Mês</th>
+                          <th>Total Belém</th>
+                          <th style={{color: '#60a5fa'}}>Belém Cível</th>
+                          <th style={{color: '#f472b6'}}>Belém Fam.</th>
+                          <th style={{color: 'gold'}}>NIES (Solar)</th>
+                          <th style={{color: 'var(--accent-secondary)'}}>NIES (SCPJ)</th>
+                          <th>NIES Total</th>
+                          <th style={{background: 'rgba(255,215,0,0.1)', color: 'gold'}}>% NIES</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {impactoNies.map(r => (
+                          <tr key={r.mes}>
+                            <td style={{fontWeight: 600}}>{r.mes}</td>
+                            <td>{r.belem_total}</td>
+                            <td style={{color: '#60a5fa'}}>{r.belem_civel}</td>
+                            <td style={{color: '#f472b6'}}>{r.belem_familia}</td>
+                            <td style={{color: 'gold'}}>{r.nies_solar}</td>
+                            <td style={{color: 'var(--accent-secondary)'}}>{r.nies_scpj}</td>
+                            <td style={{fontWeight: 600}}>{r.nies_total}</td>
+                            <td style={{background: 'rgba(255,215,0,0.1)', color: 'gold', fontWeight: 'bold'}}>{r.nies_percent}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Comparativo de Núcleos Cíveis (Fazenda, Residual, etc) */}
+                {comparativoNucleos.length > 0 && (
+                  <div className="glass-panel chart-card" style={{ marginTop: '32px' }}>
+                    <div className="chart-header">
+                      <h2 className="chart-title">Comparativo de Núcleos Cíveis (Belém)</h2>
+                      <p style={{ color: 'var(--text-secondary)' }}>Evolução de protocolos iniciais do NIES Cível contra Fazenda Pública, Cível Residual, Consumidor e Moradia.</p>
+                    </div>
+                    <div style={{ width: '100%', height: 400 }}>
+                      <ResponsiveContainer>
+                        <LineChart data={comparativoNucleos} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                          <XAxis dataKey="mes" stroke="rgba(255,255,255,0.5)" />
+                          <YAxis stroke="rgba(255,255,255,0.5)" />
+                          <Tooltip contentStyle={{ backgroundColor: 'rgba(15,23,42,0.9)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} />
+                          <Legend />
+                          <Line type="monotone" dataKey="nies_civel" name="NIES (Cível)" stroke="var(--accent-secondary)" strokeWidth={4} dot={{ r: 5 }} activeDot={{ r: 8 }} />
+                          <Line type="monotone" dataKey="fazenda" name="Fazenda Pública" stroke="#10b981" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="consumidor" name="Consumidor" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="residual" name="Cível Residual" stroke="#ec4899" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="moradia" name="Moradia" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 7: PRODUTIVIDADE DEFENSORAS NIES */}
+        {activeTab === 7 && (
+          <div className="tab-content fade-in">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                <div>
+                  <h1 className="title" style={{ fontSize: '24px', marginBottom: '8px' }}>Produtividade: Defensoras do NIES</h1>
+                  <p style={{ color: 'var(--text-secondary)' }}>Detalhamento da atuação (Família vs Cível) e cruzamento de sistemas (Solar vs SCPJ).</p>
+                </div>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <select 
+                    className="filter-select"
+                    value={selectedDefensoraMes}
+                    onChange={e => setSelectedDefensoraMes(e.target.value)}
+                  >
+                    <option value="Total">Total Acumulado (2026)</option>
+                    {[...new Set(defensorasData.map(d => d.mes))].sort().map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  
+                  <div style={{ display: 'flex', gap: 4, background: 'rgba(0,0,0,0.2)', padding: 4, borderRadius: 8 }}>
+                    <button 
+                      onClick={() => setProdutividadeView('solar')}
+                      style={{ padding: '6px 16px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer', background: produtividadeView === 'solar' ? 'var(--accent-primary)' : 'transparent', color: '#fff', fontWeight: produtividadeView === 'solar' ? 600 : 400 }}
+                    >SOLAR</button>
+                    <button 
+                      onClick={() => setProdutividadeView('scpj')}
+                      style={{ padding: '6px 16px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer', background: produtividadeView === 'scpj' ? 'var(--accent-secondary)' : 'transparent', color: '#fff', fontWeight: produtividadeView === 'scpj' ? 600 : 400 }}
+                    >SCPJ</button>
+                    <button 
+                      onClick={() => setProdutividadeView('unificado')}
+                      style={{ padding: '6px 16px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer', background: produtividadeView === 'unificado' ? 'linear-gradient(45deg, #10b981, #3b82f6)' : 'transparent', color: '#fff', fontWeight: produtividadeView === 'unificado' ? 600 : 400 }}
+                    >UNIFICADO</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Aggregated data per defensora */}
+              <div className="responsive-grid-3">
+                {['ANA MARINA', 'PAULA CUNHA', 'VERENA MAUÉS'].map(defensora => {
+                  // Filter data
+                  const dataRows = defensorasData.filter(d => 
+                    d.defensora === defensora && 
+                    (selectedDefensoraMes === 'Total' || d.mes === selectedDefensoraMes)
+                  );
+                  
+                  // Aggregate
+                  const agg = {
+                    fam_solar: dataRows.reduce((sum, r) => sum + r.fam_solar, 0),
+                    fam_scpj: dataRows.reduce((sum, r) => sum + r.fam_scpj, 0),
+                    fam_total: dataRows.reduce((sum, r) => sum + r.fam_total, 0),
+                    civ_solar: dataRows.reduce((sum, r) => sum + r.civ_solar, 0),
+                    civ_scpj: dataRows.reduce((sum, r) => sum + r.civ_scpj, 0),
+                    civ_total: dataRows.reduce((sum, r) => sum + r.civ_total, 0),
+                    total_geral: dataRows.reduce((sum, r) => sum + r.total_geral, 0)
+                  };
+
+                  // Aggregate actions based on view
+                  let topAcoes = [];
+                  if (selectedDefensoraMes === 'Total') {
+                    const acoesCount = {};
+                    dataRows.forEach(r => {
+                      const listToUse = produtividadeView === 'solar' ? r.top_acoes_solar :
+                                        produtividadeView === 'scpj' ? r.top_acoes_scpj :
+                                        r.top_acoes_total;
+                      listToUse.forEach(a => {
+                        acoesCount[a.name] = (acoesCount[a.name] || 0) + a.count;
+                      });
+                    });
+                    topAcoes = Object.entries(acoesCount).map(([name, count]) => ({name, count})).sort((a,b) => b.count - a.count);
+                  } else {
+                    if (dataRows.length > 0) {
+                      topAcoes = produtividadeView === 'solar' ? dataRows[0].top_acoes_solar :
+                                 produtividadeView === 'scpj' ? dataRows[0].top_acoes_scpj :
+                                 dataRows[0].top_acoes_total;
+                    }
+                  }
+
+                  return (
+                    <div key={defensora} className="glass-panel" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ padding: 20, background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--accent-primary)' }}>{defensora}</h2>
+                        <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                          <span style={{ fontSize: 32, fontWeight: 800 }}>{agg.total_geral}</span>
+                          <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>processos totais</span>
+                        </div>
+                      </div>
+
+                      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+                          {/* FAMILIA */}
+                          <div style={{ background: 'rgba(244, 114, 182, 0.05)', padding: 12, borderRadius: 8, border: '1px solid rgba(244, 114, 182, 0.2)' }}>
+                            <div style={{ fontSize: 12, color: '#f472b6', fontWeight: 600, marginBottom: 8 }}>FAMÍLIA ({agg.fam_total})</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                              <span style={{ color: 'var(--text-secondary)' }}>Solar</span>
+                              <span style={{ fontWeight: 600 }}>{agg.fam_solar}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                              <span style={{ color: 'var(--text-secondary)' }}>SCPJ</span>
+                              <span style={{ fontWeight: 600 }}>{agg.fam_scpj}</span>
+                            </div>
+                          </div>
+
+                          {/* CÍVEL */}
+                          <div style={{ background: 'rgba(96, 165, 250, 0.05)', padding: 12, borderRadius: 8, border: '1px solid rgba(96, 165, 250, 0.2)' }}>
+                            <div style={{ fontSize: 12, color: '#60a5fa', fontWeight: 600, marginBottom: 8 }}>CÍVEL ({agg.civ_total})</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                              <span style={{ color: 'var(--text-secondary)' }}>Solar</span>
+                              <span style={{ fontWeight: 600 }}>{agg.civ_solar}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                              <span style={{ color: 'var(--text-secondary)' }}>SCPJ</span>
+                              <span style={{ fontWeight: 600 }}>{agg.civ_scpj}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                          <h3 style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 4 }}>
+                            Ranking de Ações ({produtividadeView.toUpperCase()})
+                          </h3>
+                          <div style={{ flex: 1, overflowY: 'auto', maxHeight: '300px', paddingRight: 4 }}>
+                            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {topAcoes.map((acao, idx) => (
+                                <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                                  <span style={{ color: '#e2e8f0', flex: 1, paddingRight: 8, lineHeight: 1.4 }} title={acao.name}>
+                                    {idx + 1}. {acao.name}
+                                  </span>
+                                  <span style={{ fontWeight: 600, color: 'var(--accent-secondary)' }}>{acao.count}</span>
+                                </li>
+                              ))}
+                              {topAcoes.length === 0 && <li style={{fontSize: 12, color: 'var(--text-secondary)'}}>Sem dados para o período</li>}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
       </section>
     </div>
   );
